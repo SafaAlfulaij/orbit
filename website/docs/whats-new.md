@@ -46,7 +46,7 @@ make this refactor:
 ```
 
 Apologies for this breaking change and the refactoring it requires. We're trying
-to get the scope of each package settled prior to v1.0.
+to settle the scope of each package prior to v1.0.
 
 :::caution Breaking change
 
@@ -80,13 +80,14 @@ export interface Query<QE extends QueryExpression> {
 }
 ```
 
-This allows sources, such as `JSONAPISource`, to optionally perform these
-expressions in parallel, which it does now by default.
+This allows sources, such as
+[`JSONAPISource`](./api/jsonapi/classes/JSONAPISource.md), to optionally perform
+these expressions in parallel, which it does now by default.
 
 Now that queries can contain multiple expressions just like transforms can
 contain multiple operations, there needs to be a clear and consistent way to
 build them. And likewise, the expectation needs to be clear about the form
-or results that need to be returned.
+in which results should be returned.
 
 Here's a single expression to a query builder, which can be expected to return
 a single result:
@@ -185,16 +186,20 @@ single member of an array.
 
 ## Full vs. data-only responses
 
-All requests (queries and updates) can now be made with the `{ fullResponse: true }` option to receive responses as a
+All requests (queries and updates) can now be made with a `{ fullResponse: true
+}` option to receive responses as a
 [`FullResponse`](./api/data/interfaces/FullResponse.md). Full responses include
 the following members:
 
 - `data` - the primary data that would be returned without the `fullResponse`
   option
 
-- `details` - response details particular to the source. For `MemorySource`, this
-  will include applied and inverse operations. For a `JSONAPISource`, this will
-  include `Response` objects and documents.
+- `details` - response details particular to the source. For a
+  [`MemorySource`](./api/memory/classes/MemorySource.md), this will include
+  applied and inverse operations. For a
+  [`JSONAPISource`](./api/jsonapi/classes/JSONAPISource.md), this will include
+  [`Response`](https://developer.mozilla.org/en-US/docs/Web/API/Response)
+  objects and documents.
 
 - `transforms` - these are the transforms applied as a result of this request.
   They are always emitted with a `transform` event, which hooks into Orbit's
@@ -314,38 +319,91 @@ upon a simple and flexible
 [`Serializer`](./api/serializers/interfaces/Serializer.md) interface. This
 interface, as well as some serializers for primitives (booleans, dates,
 date-times, etc.) have been published in a new package,
-[`@orbit/serializers`](./api/serializers/index.md). And of course, new
-serializers particular to JSON:API have been added to
-[`@orbit/jsonapi`](./api/jsonapi/index.md).
+[`@orbit/serializers`](./api/serializers/index.md).
 
-**_TODO: This section is a WIP_**
+New serializers particular to JSON:API have also been added to
+[`@orbit/jsonapi`](./api/jsonapi/index.md), including:
+
+- `JSONAPIDocumentSerializer`
+- `JSONAPIResourceSerializer`
+- `JSONAPIResourceIdentitySerializer`
+- `JSONAPIResourceFieldSerializer`
+- `JSONAPIOperationSerializer`
+- `JSONAPIOperationsDocumentSerializer`
+
+These new serializers remove some of the default behaviors present in v0.16 -
+resource fields and types in documents are no longer dasherized and pluralized,
+but are left "as is" in camelized form. This lines up with the new
+recommendations for the JSON:API spec and creates much less work by default.
+
+Each of these classes can be overridden to provide custom serialization
+behavior. You could then provide those custom classes when creating your source:
+
+```typescript
+const source = new JSONAPISource({
+  schema,
+  serializerClassFor: buildSerializerClassFor({
+    [JSONAPISerializers.Resource]: MyCustomResourceSerializer,
+    [JSONAPISerializers.ResourceType]: MyCustomResourceTypeSerializer
+  })
+});
+```
+
+Alternatively, you can use the standard serializers but provide custom settings
+for those serializers. For example, here are settings that match the previous
+default serialization options:
+
+```typescript
+const source = new JSONAPISource({
+  schema,
+  serializerSettingsFor: buildSerializerSettingsFor({
+    settingsByType: {
+      [JSONAPISerializers.ResourceField]: {
+        serializationOptions: { inflectors: ['dasherize'] }
+      },
+      [JSONAPISerializers.ResourceFieldParam]: {
+        serializationOptions: { inflectors: ['dasherize'] }
+      },
+      [JSONAPISerializers.ResourceFieldPath]: {
+        serializationOptions: { inflectors: ['dasherize'] }
+      },
+      [JSONAPISerializers.ResourceType]: {
+        serializationOptions: { inflectors: ['pluralize', 'dasherize'] }
+      },
+      [JSONAPISerializers.ResourceTypePath]: {
+        serializationOptions: { inflectors: ['pluralize', 'dasherize'] }
+      }
+    }
+  })
+});
+```
 
 ## New validators
 
 A common source of problems for Orbit developers has been using data that is
 malformed or doesn't align with a schema's expectations. This can cause
-confusing errors during processing by a cache or downstream source. To address
-this problem, we're introducing "validators", which are shipped in a new package
-[`@orbit/validators`](./api/validators/index.md) along with some validators for
-primitive types. Validators that are record-specific have also been included in
-[`@orbit/records`](./api/records/index.md).
+confusing errors during processing by a cache or downstream source.
 
-**_TODO: This section is a WIP_**
+To address this problem, we're introducing "validators", which are shipped in a
+new package [`@orbit/validators`](./api/validators/index.md) that includes some
+validators for primitive types. Validators that are record-specific have also
+been included in [`@orbit/records`](./api/records/index.md).
 
 ## Record normalizers
 
 When building queries and transforms, some scenarios have been more tedious than
 necessary: identifying records by a key instead of `id`, for instance, or using
 a model class from a lib like ember-orbit to reference a record instead of its
-json identity. A new abstraction has been added to make query and transform
-builders more flexible: record normalizers. Record normalizers implement the
-[`RecordNormalizer`](./api/records/interfaces/RecordNormalizer.md) interface
-and convert record identities and/or data into a normalized form. The new base
-normalizer now allows `{ type, key, value }` to be used anywhere that `{ type,
-id }` identities can be used, which significantly reduces the annoyance of
-working with remote keys.
+json identity.
 
-**_TODO: This section is a WIP_**
+A new abstraction has been added to make query and transform builders more
+flexible: record normalizers. Record normalizers implement the
+[`RecordNormalizer`](./api/records/interfaces/RecordNormalizer.md) interface and
+convert record identities and/or data into a normalized form.
+
+The new base normalizer now allows `{ type, key, value }` to be used anywhere
+that `{ type, id }` identities can be used, which significantly reduces the
+annoyance of working with remote keys.
 
 ## Synchronous change tracking in memory forks
 
@@ -353,19 +411,77 @@ Previously, memory source forks behaved precisely like other memory sources:
 every trackable update applied at the source level (and thus async). Now, the
 default (but overrideable) behavior is to track changes at the cache level in
 forks. Thus synchronous changes can be made to a forked cache and then merged
-back into the base source. This better accomodates the most common use case for
-forks: editing form data in isolation before merging coalesced changes back to
-the base.
+back into the base source.
 
-**_TODO: This section is a WIP_**
+This improves the DX for the most common use case for forks: editing form data
+in isolation before merging coalesced changes back to the base. For example:
+
+```typescript
+// (sync) fork a base memory source
+let fork = source.fork();
+
+// (sync) add jupiter synchronously to the forked source's cache
+fork.cache.update((t) =>
+  t.addRecord({
+    type: 'planet',
+    id: 'jupiter',
+    attributes: { name: 'Jupiter' }
+  })
+);
+
+// (async) merge changes from the fork back to its base
+await source.merge(fork);
+
+// (async) jupiter should now be in the base source
+let jupiter = await source.query((q) =>
+  q.findRecord({ type: 'planet', id: 'jupiter' })
+);
+```
+
+If you want to continue to track changes only at the source-level and have
+`merge` work only with those changes, pass the following configuration setting
+when you fork a source:
+
+```typescript
+let fork = source.fork({
+  cacheSettings: { trackUpdateOperations: false }
+});
+```
+
+This will prevent update tracking at the cache level and will signal to `merge`
+that only transforms applied at the source-level should be merged.
+
+## New memory cache capabilities
+
+In addition to the above improvements to memory sources, v0.17 also adds the
+following methods to [`MemoryCache`](./api/memory/classes/MemoryCache.md):
+
+* `fork` - creates a new cache based on this one.
+* `merge` - merges changes from a forked cache back into this cache.
+* `rebase` - resets this cache's state to that of its `base` and then replays
+  any update operations.
+
+Memory cache forking / merging / rebasing is a lighter-weight way of
+"branching" changes, that can ultimately be merged back into a source.
+Cache-level forking can be paired with source-level forking for a lot of
+flexibility and power.
 
 ## Debug mode
 
-A new `debug` setting has been added to the `Orbit`
-global, that toggles between using a more verbose, developer-friendly "debug"
-mode of Orbit vs. a leaner, more performant production mode. Since debug mode
-is enabled by default, you'll need to set `Orbit.debug = false` in order to
-eliminate deprecation warnings, avoid installing validation cache processors
-by default, and other debug-friendly features.
+A new `debug` setting has been added to the
+[`Orbit`](./api/core/interfaces/OrbitGlobal.md) global, that toggles between
+using a more verbose, developer-friendly "debug" mode of Orbit vs. a leaner,
+more performant production mode.
 
-**_TODO: This section is a WIP_**
+** Debug mode is enabled by default. ** Some standard features of debug mode
+include deprecation warnings and creation of validation processors on all your
+caches.
+
+To disable debug mode:
+
+```typescript
+import { Orbit } from '@orbit/core';
+
+// disable debug mode
+Orbit.debug = false;
+```

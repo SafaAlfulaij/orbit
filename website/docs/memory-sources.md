@@ -75,7 +75,7 @@ While `memory.query` is asynchronous and thus returns results wrapped in a
 promise, `memory.cache.query` is synchronous and returns results directly. For
 example:
 
-```javascript
+```typescript
 // Results will be returned synchronously by querying the cache
 let planets = memory.cache.query(q => q.findRecords("planet").sort("name"));
 ```

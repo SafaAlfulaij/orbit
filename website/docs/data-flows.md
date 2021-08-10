@@ -53,7 +53,7 @@ Let's take a look at what events can trigger other actions:
 
 We can coordinate sources through simple event listeners, such as:
 
-```javascript
+```typescript
 memory.on("beforeUpdate", transform => {
   remote.push(transform);
 });
@@ -66,7 +66,7 @@ complete, so it will proceed in parallel with the `memory` source being updated.
 As an alternative, we can use a "blocking" strategy in our event listener by
 simply returning a promise:
 
-```javascript
+```typescript
 memory.on("beforeUpdate", transform => remote.push(transform));
 ```
 
